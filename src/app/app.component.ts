@@ -1,4 +1,4 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, Pipe, PipeTransform} from '@angular/core';
 import {DataUtils} from "./utils/data.utils";
 
 /*
@@ -9,12 +9,13 @@ import {DataUtils} from "./utils/data.utils";
     Пусть на входе - 4 нейрона (= 4 признака)
           на выходе - 1 нейрон (= 1 ответ)
           на скрытом - (4+1)/2 = ~3 нейрона
+          на входе (контекстные) - 3 нейрона
 
     Тогда
-    матрица весов на входе = вектор длиной 3
+    матрица весов на входе = матрица размерностью 4х3 (4 строки, 3 столца)
       [[w11, w12, w13], [w21, w22, w23],
        [w31, w32, w33], [w41, w42, w43]]
-    матрица весов на скрытом = вектор длиной 3
+    матрица весов на скрытом = матрица размерностью 3х1 (3 строки, 1 столбец)
       [[hw1], [hw2], [hw3]]
 */
 
@@ -33,6 +34,10 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.dataUtils.datasetToVector();
+  }
+
+  pipe() {
+
   }
 
   feedWardPropagation() {
