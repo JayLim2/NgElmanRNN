@@ -30,9 +30,16 @@ export class DataUtils {
 
   public loading: boolean = false;
 
+  public training: boolean = false;
+  public trained: boolean = false;
+
   constructor(
     private http: HttpClient
   ) {
+  }
+
+  getProgress(epoch: number): string {
+    return `${Math.min(100, Math.round(epoch / this.configuration.epochs) * 100)}%`
   }
 
   get trainingSamples(): Array<number[]> {
@@ -101,16 +108,17 @@ export class DataUtils {
     this.train();
   }
 
+  public currentEpoch;
+
   public train() {
-    this.datasetToVector();
-    const learnRate = 0.1;
+    this.training = true;
     const epochs = this.configuration.epochs;
     if (epochs > 0) {
       const inputCount = this.configuration.inputCount;
       const contextCount = this.configuration.contextCount;
 
       //iterate by epochs
-      for (let currentEpoch = 0; currentEpoch < epochs; currentEpoch++) {
+      for (this.currentEpoch = 0; this.currentEpoch < epochs; this.currentEpoch++) {
         let x: number[] = Array(inputCount + contextCount).fill(0);
         // console.log(inputCount, " ", contextCount);
         // console.log("X = ", x);
@@ -181,24 +189,124 @@ export class DataUtils {
           }
 
           // корректировка весов
-
+          this.updateInputWeights(this.currentEpoch, x, hiddenWeightSums, outputWeightSums, currentErrors);
+          // this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
-        if (currentEpoch % 10 === 0) {
-          console.log(`Epoch: ${currentEpoch}`);
+        if (this.currentEpoch % 10 === 0) {
+          console.log(`Epoch: ${this.currentEpoch}`);
           console.log("o: ", this._expectedOutput, " ", actualOutput, " ", e);
         }
       }
     }
+    this.training = false;
+    this.trained = true;
   }
 
-  public updateInputWeights(epoch: number = 0) {
+  public updateInputWeights(epoch: number = 0,
+                            x: number[],
+                            hiddenWeightSum: number[],
+                            outputWeightSum: number[],
+                            errors: number[]) {
+
+    const gradient: Matrix = this.getInputWeightsGradient(epoch, x, hiddenWeightSum, outputWeightSum, errors);
+    const weights: Matrix = this.inputWeights;
+    const learnRate: number = this.getLearnRate();
+    this.updateWeights(gradient, weights, learnRate);
+  }
+
+  private getInputWeightsGradient(epoch: number,
+                                  x: number[],
+                                  hiddenWeightSum: number[],
+                                  outputWeightSum: number[],
+                                  errors: number[]): Matrix {
+
+    const gradientRowsCount = this.configuration.inputCount + this.configuration.contextCount;
+    const gradientColumnsCount = this.configuration.hiddenCount;
+
+    const gradient = new Matrix(gradientRowsCount, gradientColumnsCount);
+
+    const w1 = this.inputWeights;
+    const w2 = this.hiddenWeights;
+
     // delta 1
+    for (let row = 0; row < gradientRowsCount; row++) {
+      for (let column = 0; column < gradientColumnsCount; column++) {
 
+        //calculate gradient
+        let gradientValue = 0;
+        for (let s = 0; s < this.configuration.outputCount; s++) {
+          let e_s = errors[s];
+          let d_g_s = outputWeightSum[s];
+          let sum = 0;
+          for (let i = 0; i < this.configuration.hiddenCount; i++) {
+            let u_i = hiddenWeightSum[i];
+            let d_u_i = MathUtils.dSigmoid(u_i);
+            let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
+            if (epoch > 0) { // dv_dw(0) = 0
+              for (let k = 0; k < this.configuration.hiddenCount; k++) {
+                console.log(k + this.configuration.inputCount);
+                console.log(w1);
+                console.log(w1[k + this.configuration.inputCount])
+                console.log( w1[k + this.configuration.inputCount][i]);
+                dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1[k + this.configuration.inputCount][i];
+              }
+            }
+            dab_xb = Math.floor(dab_xb);
+            sum += d_u_i * dab_xb;
+          }
+          gradientValue += e_s * d_g_s * sum;
+        }
+        gradient.set(row, column, gradientValue);
+      }
+    }
+
+    return gradient;
   }
 
-  public updateHiddenWeights() {
-    // delta 2
+  public updateHiddenWeights(hiddenWeightSum: number[],
+                             outputWeightSum: number[],
+                             errors: number[]) {
+
+    const gradient: Matrix = this.getHiddenWeightsGradient(hiddenWeightSum, outputWeightSum, errors);
+    const weights: Matrix = this.hiddenWeights;
+    const learnRate: number = this.getLearnRate();
+    this.updateWeights(gradient, weights, learnRate);
+  }
+
+  private getHiddenWeightsGradient(hiddenWeightSum: number[],
+                                   outputWeightSum: number[],
+                                   errors: number[]): Matrix {
+
+    const gradientRowsCount = this.configuration.hiddenCount;
+    const gradientColumnsCount = this.configuration.outputCount;
+
+    const gradient = new Matrix(gradientRowsCount, gradientColumnsCount);
+
+    // delta 1
+    for (let row = 0; row < gradientRowsCount; row++) {
+      for (let column = 0; column < gradientColumnsCount; column++) {
+
+        //calculate gradient
+        let gradientValue = errors[column]
+          * MathUtils.dSigmoid(outputWeightSum[column])
+          * MathUtils.sigmoid(hiddenWeightSum[row]);
+
+        gradient.set(row, column, gradientValue);
+      }
+    }
+
+    return gradient;
+  }
+
+  private updateWeights(gradient: Matrix, weights: Matrix, learnRate: number) {
+    const {rowsCount, columnsCount} = weights.size();
+    for (let i = 0; i < rowsCount; i++) {
+      for (let j = 0; j < columnsCount; j++) {
+        let newWeight = weights.get(i, j) - learnRate * gradient.get(i, j);
+        weights.set(i, j, newWeight);
+      }
+    }
   }
 
   public feedWardPropagation() {
@@ -207,6 +315,10 @@ export class DataUtils {
 
   public backWardPropagation() {
 
+  }
+
+  private getLearnRate(): number {
+    return 0.1;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {

@@ -1,4 +1,3 @@
-
 export class MathUtils {
   public static sigmoid(x: number): number {
     return 1 / (1 - Math.exp(-x));
@@ -17,7 +16,7 @@ export class MathUtils {
     return 1 / Math.pow(Math.cosh(x), 2);
   }
 
-  private static mseLoss(yTrue: number[], yPred: number[]): number {
+  public static mseLoss(yTrue: number[], yPred: number[]): number {
     let count = yTrue.length;
     let sum = 0;
     for (let i = 0; i < count; i++) {
@@ -25,6 +24,10 @@ export class MathUtils {
       sum += Math.pow(sub, 2);
     }
     return sum / 2;
+  }
+
+  public static kroneckerDelta(i: number, j: number): number {
+    return i == j ? 1 : 0;
   }
 }
 
@@ -61,6 +64,16 @@ export class Matrix {
 
   get(row: number, column: number): number {
     return this._rows[row][column];
+  }
+
+  size(): { rowsCount: number, columnsCount: number } {
+    let size = {rowsCount: 0, columnsCount: 0};
+    if (this._rows.length === 0) {
+      return size;
+    }
+    size.rowsCount = this._rows.length;
+    size.columnsCount = this._rows[0].length;
+    return size;
   }
 
 }

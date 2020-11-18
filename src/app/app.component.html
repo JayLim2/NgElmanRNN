@@ -4,6 +4,16 @@
   <ng-container *ngIf="!dataUtils.trainingSamples && dataUtils.loading; else train">
     Preparing data...
   </ng-container>
+
+  <ng-container *ngIf="dataUtils.training && !dataUtils.trained; else trained">
+    Training... {{dataUtils.currentEpoch}}
+  </ng-container>
+  <ng-template #trained>
+    <ng-container *ngIf="dataUtils.trained">
+      Trained successfully.
+    </ng-container>
+  </ng-template>
+
   <ng-template #train>
     <button (click)="onTrain()">
       Train
