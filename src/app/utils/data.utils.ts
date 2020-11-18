@@ -117,6 +117,7 @@ export class DataUtils {
         // console.log("X = ", x);
         //iterate by training samples
         let actualOutput = [];
+        let e = [];
         for (let index = 0; index < this.trainingSamples.length; index++) {
           let currentSample: number[] = this.trainingSamples[index]; // vector, [x1, x2, x3, x4]
           for (let i = 0; i < inputCount; i++) {
@@ -163,11 +164,14 @@ export class DataUtils {
           actualOutput = [...actualOutput, ...currentOutput]; //fixme
 
           let error = this.mseLoss(this._expectedOutput, actualOutput);
-
-          if (currentEpoch % 10 === 0) {
-            console.log(`Epoch: ${currentEpoch}`);
-            console.log("o: ", this._expectedOutput, " ", actualOutput, " ", error);
+          if (error) {
+            e.push(error);
           }
+        }
+
+        if (currentEpoch % 10 === 0) {
+          console.log(`Epoch: ${currentEpoch}`);
+          console.log("o: ", this._expectedOutput, " ", actualOutput, " ", e);
         }
       }
     }
