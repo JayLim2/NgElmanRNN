@@ -1,4 +1,4 @@
-import {Component, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, OnInit} from '@angular/core';
 import {DataUtils} from "./utils/data.utils";
 
 /*
@@ -27,13 +27,21 @@ import {DataUtils} from "./utils/data.utils";
 export class AppComponent implements OnInit {
   title = 'NgElmanRNN 0.1-snapshot';
 
+  public progress = "";
+
   constructor(
-    public dataUtils: DataUtils
+    public dataUtils: DataUtils,
+    public cdr: ChangeDetectorRef
   ) {
   }
 
   ngOnInit() {
     this.dataUtils.datasetToVector();
+    this.dataUtils.currentEpoch$
+      .subscribe((val) => {
+        this.progress = this.dataUtils.getProgress(val as number);
+        this.cdr.detectChanges();
+      })
   }
 
   onTrain() {

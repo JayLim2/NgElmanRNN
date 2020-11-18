@@ -1,12 +1,10 @@
 import {HttpClient} from "@angular/common/http";
 import {Injectable} from "@angular/core";
-import {Observable} from "rxjs";
+import {Observable, Subject} from "rxjs";
 import {MathUtils, Matrix} from "./math.utils";
 
 @Injectable()
 export class DataUtils {
-
-  private _currentDataset: string = null;
 
   private _trainingSamples: Array<number[]>;
   private _validationSamples: Array<number[]>;
@@ -110,6 +108,10 @@ export class DataUtils {
 
   public currentEpoch;
 
+  public currentEpochSubject = new Subject();
+
+  public currentEpoch$ = this.currentEpochSubject.asObservable();
+
   public train() {
     this.training = true;
     const epochs = this.configuration.epochs;
@@ -119,6 +121,7 @@ export class DataUtils {
 
       //iterate by epochs
       for (this.currentEpoch = 0; this.currentEpoch < epochs; this.currentEpoch++) {
+        this.currentEpochSubject.next(this.currentEpoch);
         let x: number[] = Array(inputCount + contextCount).fill(0);
         // console.log(inputCount, " ", contextCount);
         // console.log("X = ", x);
@@ -132,7 +135,7 @@ export class DataUtils {
           }
           let w: Matrix = this.inputWeights;
 
-          console.log("W: ", w.toString());
+          // console.log("W: ", w.toString());
 
           //iterate by hidden neurons
           let hiddenWeightSums = [];
@@ -212,6 +215,7 @@ export class DataUtils {
     const gradient: Matrix = this.getInputWeightsGradient(epoch, x, hiddenWeightSum, outputWeightSum, errors);
     const weights: Matrix = this.inputWeights;
     const learnRate: number = this.getLearnRate();
+    // console.log("gradient: \n", gradient.toString());
     this.updateWeights(gradient, weights, learnRate);
   }
 
@@ -226,8 +230,7 @@ export class DataUtils {
 
     const gradient = new Matrix(gradientRowsCount, gradientColumnsCount);
 
-    const w1 = this.inputWeights;
-    const w2 = this.hiddenWeights;
+    const w1: Matrix = this.inputWeights;
 
     // delta 1
     for (let row = 0; row < gradientRowsCount; row++) {
@@ -241,15 +244,15 @@ export class DataUtils {
           let sum = 0;
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
             let u_i = hiddenWeightSum[i];
-            let d_u_i = MathUtils.dSigmoid(u_i);
+            let d_u_i = MathUtils.dSigmoid(u_i); //fixme
             let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
             if (epoch > 0) { // dv_dw(0) = 0
               for (let k = 0; k < this.configuration.hiddenCount; k++) {
-                console.log(k + this.configuration.inputCount);
-                console.log(w1);
-                console.log(w1[k + this.configuration.inputCount])
-                console.log(w1[k + this.configuration.inputCount][i]);
-                dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1[k + this.configuration.inputCount][i];
+                // console.log("index: ", k + this.configuration.inputCount);
+                // console.log("weights: ", w1);
+                // console.log("row: ", w1.getRow(k + this.configuration.inputCount))
+                // console.log("item: ", w1.get(k + this.configuration.inputCount, i));
+                dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
               }
             }
             dab_xb = Math.floor(dab_xb);

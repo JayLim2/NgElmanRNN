@@ -6,7 +6,7 @@
   </ng-container>
 
   <ng-container *ngIf="dataUtils.training && !dataUtils.trained; else trained">
-    Training... {{dataUtils.currentEpoch}}
+    Training... {{progress}}
   </ng-container>
   <ng-template #trained>
     <ng-container *ngIf="dataUtils.trained">
