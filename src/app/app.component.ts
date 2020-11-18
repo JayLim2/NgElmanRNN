@@ -33,11 +33,7 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.dataUtils.datasetToVector();
-  }
-
-  pipe() {
-
+    this.dataUtils.run();
   }
 
   feedWardPropagation() {

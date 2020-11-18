@@ -1,14 +1,17 @@
 import {HttpClient} from "@angular/common/http";
 import {Injectable} from "@angular/core";
+import {Observable} from "rxjs";
 
 @Injectable()
 export class DataUtils {
 
   private _currentDataset: string = null;
 
-  private _trainingSamples: number[];
-  private _validationSamples: number[];
-  private _testingSamples: number[];
+  private _trainingSamples: Array<number[]>;
+  private _validationSamples: Array<number[]>;
+  private _testingSamples: Array<number[]>;
+
+  private _expectedOutput: number[];
 
   private configuration = {
     epochs: 1000,
@@ -33,15 +36,15 @@ export class DataUtils {
     return this._currentDataset;
   }
 
-  get trainingSamples(): number[] {
+  get trainingSamples(): Array<number[]> {
     return this._trainingSamples;
   }
 
-  get validationSamples(): number[] {
+  get validationSamples(): Array<number[]> {
     return this._validationSamples;
   }
 
-  get testingSamples(): number[] {
+  get testingSamples(): Array<number[]> {
     return this._testingSamples;
   }
 
@@ -92,6 +95,63 @@ export class DataUtils {
     this.configuration.testing = 100 - training - validation;
   }
 
+  /**
+   * Основной метод: запускает обучения, а затем тестирование и выводит результаты
+   */
+  public run() {
+    this.train();
+  }
+
+  public train() {
+    this.datasetToVector();
+    const learnRate = 0.1;
+    const epochs = this.configuration.epochs;
+    if (epochs > 0) {
+      //iterate by epochs
+      for (let currentEpoch = 0; currentEpoch < epochs; currentEpoch++) {
+        //iterate by training samples
+        for (let index = 0; index < this.trainingSamples.length; index++) {
+          let x: number[] = this.trainingSamples[index]; // vector, [x1, x2, x3, x4]
+          x = [...x, ...Array(this.configuration.contextCount).fill(0)] // FIXME
+          let w: Matrix = this.inputWeights;
+
+          //iterate by hidden neurons
+          let h = [];
+          for (let i = 0; i < this.configuration.hiddenCount; i++) {
+            /*
+            на вход h[i] приходит [x1, x2, x3, x4, h1, h2, h3] и веса [[w1, w2, w3], [...]]
+             */
+            let sum = 0;
+            for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
+              // w[i][j] * x[j], взвешенная сумма k-го скрытого нейрона
+              for (let k = 0; k < x.length; k++) {
+                sum += w.get(i, j) * x[k];
+              }
+            }
+            h[i] = this.sigmoid(sum);
+          }
+
+          //iterate by output neurons
+          let o = [];
+          w = this.hiddenWeights;
+          for (let s = 0; s < this.configuration.outputCount; s++) {
+            /*
+            на вход o[s] приходит [h1, h2, h3] и веса
+             */
+            let sum = 0;
+            for (let i = 0; i < this.configuration.hiddenCount; i++) {
+              // w[i][s] * h[i], взвешенная сумма нейрона
+              for (let j = 0; j < h.length; j++) {
+                sum += w.get(i, s) * h[j];
+              }
+            }
+            o[s] = this.sigmoid(sum);
+          }
+        }
+      }
+    }
+  }
+
   public feedWardPropagation() {
 
   }
@@ -104,37 +164,48 @@ export class DataUtils {
     return 1 / (1 - Math.exp(-x));
   }
 
-  private dSigmoid(x: number) {
+  private dSigmoid(x: number): number {
     let fx = this.sigmoid(x);
     return fx * (1 - fx);
   }
 
-  private mseLoss(yTrue: number, yPred: number) {
-    return Math.pow(yTrue - yPred, 2) / 2;
+  private mseLoss(yTrue: number[], yPred: number[]): number {
+    let count = this.trainingSamples.length;
+    let sum = 0;
+    for (let i = 0; i < yTrue.length; i++) {
+      let sub = yTrue[i] - yPred[i];
+      sum += Math.pow(sub, 2);
+    }
+    return sum / count;
   }
 
-  private distribute(samples: number[]) {
-    if (samples && samples.length > 0) {
+  private distribute(samples: Array<number[]>, yTrue: number[]): void {
+    if (samples && samples.length > 0 && yTrue && yTrue.length > 0) {
       let length = samples.length;
       let trainingLength = this.getNewLength(length, this.configuration.training);
       let validationLength = this.getNewLength(length, this.configuration.validation);
+      //samples
       this._trainingSamples = samples.slice(0, trainingLength);
       this._validationSamples = samples.slice(trainingLength, trainingLength + validationLength);
       this._testingSamples = samples.slice(trainingLength + validationLength, length);
+      //output
+      this._expectedOutput = yTrue.slice(0, trainingLength);
 
       console.log(this._trainingSamples);
       console.log(this._validationSamples);
       console.log(this._testingSamples);
+      console.log(this._expectedOutput);
     }
   }
 
-  private getNewLength(length: number = 0, percent: number = 0) {
+  private getNewLength(length: number = 0, percent: number = 0): number {
     if (length !== 0 && percent !== 0) {
       return Math.floor((percent / 100) * length);
     }
+    return 0;
   }
 
-  private datasetToVector() {
+  private datasetToVector(): void {
     this.loadDataset().subscribe((dataset) => {
       this._currentDataset = dataset;
 
@@ -142,23 +213,23 @@ export class DataUtils {
         .map(line => line.trim())
         .filter(line => line !== "");
       let classes = new Set();
-      let resultVector = [];
+      let subjectParamsVector = [];
+      let expectedOutputVector = [];
       for (const lineStr of lines) {
         let line = lineStr.split(" ").map(value => value.trim());
         line = line.slice(1, line.length);
         let clazz = line[line.length - 1];
         classes.add(clazz);
-        let lineVector = [
-          ...line.slice(0, line.length - 1).map(element => Number.parseFloat(element)),
-          this.indexOf(clazz, classes)
-        ];
-        resultVector.push(lineVector);
+        let lineVector: number[] = line.slice(0, line.length - 1)
+          .map(element => Number.parseFloat(element));
+        subjectParamsVector.push(lineVector);
+        expectedOutputVector.push(this.indexOf(clazz, classes));
       }
       this.configuration.outputCount = 1;
-      this.configuration.inputCount = resultVector[0].length - this.configuration.outputCount;
+      this.configuration.inputCount = subjectParamsVector[0].length - this.configuration.outputCount;
       this.configuration.hiddenCount = Math.round((this.configuration.inputCount + this.configuration.outputCount) / 2);
       this.configuration.contextCount = this.configuration.hiddenCount;
-      this.distribute(resultVector);
+      this.distribute(subjectParamsVector, expectedOutputVector);
     }, (error) => {
       console.error(error);
     })
@@ -175,7 +246,7 @@ export class DataUtils {
     return -1;
   }
 
-  private loadDataset() {
+  private loadDataset(): Observable<any> {
     return this.http.get("../../assets/irisDataset.txt", {
       responseType: "text"
     });
@@ -208,6 +279,10 @@ export class Matrix {
 
   set(row: number, column: number, value: number): void {
     this._rows[row][column] = value;
+  }
+
+  getRow(row: number): number[] {
+    return this._rows[row];
   }
 
   get(row: number, column: number): number {
