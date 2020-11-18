@@ -1,6 +1,7 @@
 import {HttpClient} from "@angular/common/http";
 import {Injectable} from "@angular/core";
 import {Observable} from "rxjs";
+import {MathUtils, Matrix} from "./math.utils";
 
 @Injectable()
 export class DataUtils {
@@ -11,7 +12,7 @@ export class DataUtils {
   private _validationSamples: Array<number[]>;
   private _testingSamples: Array<number[]>;
 
-  private _expectedOutput: number[];
+  private _expectedOutput: Array<number[]>;
 
   private configuration = {
     epochs: 1000,
@@ -27,13 +28,11 @@ export class DataUtils {
   private _inputWeights: Matrix = null;
   private _hiddenWeights: Matrix = null;
 
+  public loading: boolean = false;
+
   constructor(
     private http: HttpClient
   ) {
-  }
-
-  get currentDataset(): string {
-    return this._currentDataset;
   }
 
   get trainingSamples(): Array<number[]> {
@@ -128,6 +127,7 @@ export class DataUtils {
           // console.log(w);
 
           //iterate by hidden neurons
+          let hiddenWeightSums = [];
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
             /*
             на вход h[i] приходит [x1, x2, x3, x4, h1, h2, h3] и веса [[w1, w2, w3], [...]]
@@ -139,11 +139,13 @@ export class DataUtils {
                 sum += w.get(j, i) * x[k];
               }
             }
-            x[inputCount + i] = this.sigmoid(sum);
+            hiddenWeightSums[i] = MathUtils.sigmoid(sum);
+            x[inputCount + i] = hiddenWeightSums[i];
           }
 
           //iterate by output neurons
           w = this.hiddenWeights;
+          let outputWeightSums = [];
           let currentOutput = [];
           for (let s = 0; s < this.configuration.outputCount; s++) {
             /*
@@ -159,14 +161,27 @@ export class DataUtils {
                 // console.log(w.get(i, s), " ", x[inputCount + j])
               }
             }
-            currentOutput[s] = this.sigmoid(sum);
+            outputWeightSums[s] = sum;
+            currentOutput[s] = MathUtils.sigmoid(outputWeightSums[s]);
           }
-          actualOutput = [...actualOutput, ...currentOutput]; //fixme
+          actualOutput = [...actualOutput, ...currentOutput];
 
-          let error = this.mseLoss(this._expectedOutput, actualOutput);
-          if (error) {
-            e.push(error);
+          //error
+          let currentErrors = [];
+          let resultError = 0;
+          for (let i = 0; i < this.configuration.outputCount; i++) {
+            let error = this._expectedOutput[index][i] - currentOutput[i];
+            currentErrors.push(error);
+            resultError += Math.pow(error, 2);
           }
+          resultError = resultError / 2;
+
+          if (resultError) {
+            e.push(resultError);
+          }
+
+          // корректировка весов
+
         }
 
         if (currentEpoch % 10 === 0) {
@@ -177,32 +192,21 @@ export class DataUtils {
     }
   }
 
+  public updateInputWeights(epoch: number = 0) {
+    // delta 1
+
+  }
+
+  public updateHiddenWeights() {
+    // delta 2
+  }
+
   public feedWardPropagation() {
 
   }
 
   public backWardPropagation() {
 
-  }
-
-  private sigmoid(x: number): number {
-    return 1 / (1 - Math.exp(-x));
-  }
-
-  private dSigmoid(x: number): number {
-    let fx = this.sigmoid(x);
-    return fx * (1 - fx);
-  }
-
-  private mseLoss(yTrue: number[], yPred: number[]): number {
-    // console.log("y: ", yTrue, " ", yPred);
-    let count = yTrue.length;
-    let sum = 0;
-    for (let i = 0; i < count; i++) {
-      let sub = yTrue[i] - yPred[i];
-      sum += Math.pow(sub, 2);
-    }
-    return sum / 2;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
@@ -215,7 +219,7 @@ export class DataUtils {
       this._validationSamples = samples.slice(trainingLength, trainingLength + validationLength);
       this._testingSamples = samples.slice(trainingLength + validationLength, length);
       //output
-      this._expectedOutput = yTrue.slice(0, trainingLength);
+      this._expectedOutput = yTrue.slice(0, trainingLength).map(y => [y]);
 
       // console.log(this._trainingSamples);
       // console.log(this._validationSamples);
@@ -231,13 +235,9 @@ export class DataUtils {
     return 0;
   }
 
-  public loading: boolean = false;
-
   public datasetToVector(): void {
     this.loading = true;
     this.loadDataset().subscribe((dataset) => {
-      this._currentDataset = dataset;
-
       let lines = dataset.split("\n")
         .map(line => line.trim())
         .filter(line => line !== "");
@@ -280,43 +280,6 @@ export class DataUtils {
     return this.http.get("../../assets/irisDataset.txt", {
       responseType: "text"
     });
-  }
-
-}
-
-export class Matrix {
-
-  private _rows: Array<number[]> = [];
-
-  constructor(rows: number = 0, columns?: number) {
-    if (rows > 0) {
-      if (!columns || columns <= 0) {
-        columns = rows;
-      }
-      for (let i = 0; i < rows; i++) {
-        this._rows[i] = Array<number>(columns).fill(0);
-      }
-    }
-  }
-
-  get rowsCount(): number {
-    return this._rows.length;
-  }
-
-  get columnsCount(): number {
-    return this._rows[0].length;
-  }
-
-  set(row: number, column: number, value: number): void {
-    this._rows[row][column] = value;
-  }
-
-  getRow(row: number): number[] {
-    return this._rows[row];
-  }
-
-  get(row: number, column: number): number {
-    return this._rows[row][column];
   }
 
 }
