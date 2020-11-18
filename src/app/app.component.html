@@ -1,12 +1,12 @@
 <p>{{title}}</p>
 
 <div>
-  <b>Current dataset</b>
-  <br/>
-  Training samples:
-  {{dataUtils.trainingSamples}}
-  Validation samples:
-  {{dataUtils.validationSamples}}
-  Testing samples:
-  {{dataUtils.testingSamples}}
+  <ng-container *ngIf="!dataUtils.trainingSamples && dataUtils.loading; else train">
+    Preparing data...
+  </ng-container>
+  <ng-template #train>
+    <button (click)="onTrain()">
+      Train
+    </button>
+  </ng-template>
 </div>

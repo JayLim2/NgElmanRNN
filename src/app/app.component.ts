@@ -1,4 +1,4 @@
-import {Component, OnInit, Pipe, PipeTransform} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import {DataUtils} from "./utils/data.utils";
 
 /*
@@ -33,15 +33,11 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.dataUtils.run();
+    this.dataUtils.datasetToVector();
   }
 
-  feedWardPropagation() {
-
-  }
-
-  backWardPropagation() {
-
+  onTrain() {
+    this.dataUtils.train();
   }
 
 }

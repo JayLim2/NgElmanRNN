@@ -107,33 +107,43 @@ export class DataUtils {
     const learnRate = 0.1;
     const epochs = this.configuration.epochs;
     if (epochs > 0) {
+      const inputCount = this.configuration.inputCount;
+      const contextCount = this.configuration.contextCount;
+
       //iterate by epochs
       for (let currentEpoch = 0; currentEpoch < epochs; currentEpoch++) {
+        let x: number[] = Array(inputCount + contextCount).fill(0);
+        // console.log(inputCount, " ", contextCount);
+        // console.log("X = ", x);
         //iterate by training samples
+        let actualOutput = [];
         for (let index = 0; index < this.trainingSamples.length; index++) {
-          let x: number[] = this.trainingSamples[index]; // vector, [x1, x2, x3, x4]
-          x = [...x, ...Array(this.configuration.contextCount).fill(0)] // FIXME
+          let currentSample: number[] = this.trainingSamples[index]; // vector, [x1, x2, x3, x4]
+          for (let i = 0; i < inputCount; i++) {
+            x[i] = currentSample[i];
+          }
           let w: Matrix = this.inputWeights;
 
+          // console.log(w);
+
           //iterate by hidden neurons
-          let h = [];
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
             /*
             на вход h[i] приходит [x1, x2, x3, x4, h1, h2, h3] и веса [[w1, w2, w3], [...]]
              */
             let sum = 0;
             for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
-              // w[i][j] * x[j], взвешенная сумма k-го скрытого нейрона
+              // w[j][i] * x[j], взвешенная сумма i-го скрытого нейрона
               for (let k = 0; k < x.length; k++) {
-                sum += w.get(i, j) * x[k];
+                sum += w.get(j, i) * x[k];
               }
             }
-            h[i] = this.sigmoid(sum);
+            x[inputCount + i] = this.sigmoid(sum);
           }
 
           //iterate by output neurons
-          let o = [];
           w = this.hiddenWeights;
+          let currentOutput = [];
           for (let s = 0; s < this.configuration.outputCount; s++) {
             /*
             на вход o[s] приходит [h1, h2, h3] и веса
@@ -141,11 +151,22 @@ export class DataUtils {
             let sum = 0;
             for (let i = 0; i < this.configuration.hiddenCount; i++) {
               // w[i][s] * h[i], взвешенная сумма нейрона
-              for (let j = 0; j < h.length; j++) {
-                sum += w.get(i, s) * h[j];
+              for (let j = 0; j < this.configuration.hiddenCount; j++) {
+                sum += w.get(i, s) * x[inputCount + j];
+                // console.log(x);
+                // console.log(x.length, " ", j, " ", inputCount + j);
+                // console.log(w.get(i, s), " ", x[inputCount + j])
               }
             }
-            o[s] = this.sigmoid(sum);
+            currentOutput[s] = this.sigmoid(sum);
+          }
+          actualOutput = [...actualOutput, ...currentOutput]; //fixme
+
+          let error = this.mseLoss(this._expectedOutput, actualOutput);
+
+          if (currentEpoch % 10 === 0) {
+            console.log(`Epoch: ${currentEpoch}`);
+            console.log("o: ", this._expectedOutput, " ", actualOutput, " ", error);
           }
         }
       }
@@ -170,13 +191,14 @@ export class DataUtils {
   }
 
   private mseLoss(yTrue: number[], yPred: number[]): number {
-    let count = this.trainingSamples.length;
+    // console.log("y: ", yTrue, " ", yPred);
+    let count = yTrue.length;
     let sum = 0;
-    for (let i = 0; i < yTrue.length; i++) {
+    for (let i = 0; i < count; i++) {
       let sub = yTrue[i] - yPred[i];
       sum += Math.pow(sub, 2);
     }
-    return sum / count;
+    return sum / 2;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
@@ -191,10 +213,10 @@ export class DataUtils {
       //output
       this._expectedOutput = yTrue.slice(0, trainingLength);
 
-      console.log(this._trainingSamples);
-      console.log(this._validationSamples);
-      console.log(this._testingSamples);
-      console.log(this._expectedOutput);
+      // console.log(this._trainingSamples);
+      // console.log(this._validationSamples);
+      // console.log(this._testingSamples);
+      // console.log(this._expectedOutput);
     }
   }
 
@@ -205,7 +227,10 @@ export class DataUtils {
     return 0;
   }
 
-  private datasetToVector(): void {
+  public loading: boolean = false;
+
+  public datasetToVector(): void {
+    this.loading = true;
     this.loadDataset().subscribe((dataset) => {
       this._currentDataset = dataset;
 
@@ -226,10 +251,11 @@ export class DataUtils {
         expectedOutputVector.push(this.indexOf(clazz, classes));
       }
       this.configuration.outputCount = 1;
-      this.configuration.inputCount = subjectParamsVector[0].length - this.configuration.outputCount;
+      this.configuration.inputCount = subjectParamsVector[0].length;
       this.configuration.hiddenCount = Math.round((this.configuration.inputCount + this.configuration.outputCount) / 2);
       this.configuration.contextCount = this.configuration.hiddenCount;
       this.distribute(subjectParamsVector, expectedOutputVector);
+      this.loading = false;
     }, (error) => {
       console.error(error);
     })
