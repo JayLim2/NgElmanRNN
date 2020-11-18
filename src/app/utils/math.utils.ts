@@ -76,4 +76,15 @@ export class Matrix {
     return size;
   }
 
+  toString(): string {
+    let s = ``;
+    for (let i = 0; i < this._rows.length; i++) {
+      for (let j = 0; j < this._rows[0].length; j++) {
+        s += `${this.get(i, j)} `;
+      }
+      s += '\n';
+    }
+    return s;
+  }
+
 }

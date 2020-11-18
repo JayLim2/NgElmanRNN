@@ -60,7 +60,7 @@ export class DataUtils {
         this.configuration.inputCount + this.configuration.contextCount,
         this.configuration.hiddenCount
       );
-      for (let i = 0; i < this.configuration.inputCount; i++) {
+      for (let i = 0; i < this.configuration.inputCount + this.configuration.hiddenCount; i++) {
         for (let j = 0; j < this.configuration.hiddenCount; j++) {
           matrix.set(i, j, Math.random());
         }
@@ -132,7 +132,7 @@ export class DataUtils {
           }
           let w: Matrix = this.inputWeights;
 
-          // console.log(w);
+          console.log("W: ", w.toString());
 
           //iterate by hidden neurons
           let hiddenWeightSums = [];
@@ -248,7 +248,7 @@ export class DataUtils {
                 console.log(k + this.configuration.inputCount);
                 console.log(w1);
                 console.log(w1[k + this.configuration.inputCount])
-                console.log( w1[k + this.configuration.inputCount][i]);
+                console.log(w1[k + this.configuration.inputCount][i]);
                 dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1[k + this.configuration.inputCount][i];
               }
             }
