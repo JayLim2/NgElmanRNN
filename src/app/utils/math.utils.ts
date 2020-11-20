@@ -1,3 +1,23 @@
+export class MathDecorator {
+
+  public static function1(x: number): number {
+    return MathUtils.sigmoid(x);
+  }
+
+  public static function2(x: number): number {
+    return MathUtils.tanh(x);
+  }
+
+  public static derivative1(x: number): number {
+    return MathUtils.dSigmoid(x);
+  }
+
+  public static derivative2(x: number): number {
+    return MathUtils.dTanh(x);
+  }
+
+}
+
 export class MathUtils {
   public static sigmoid(x: number): number {
     return 1 / (1 + Math.exp(-x));

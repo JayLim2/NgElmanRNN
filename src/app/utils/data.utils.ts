@@ -1,7 +1,7 @@
 import {HttpClient} from "@angular/common/http";
 import {Injectable} from "@angular/core";
 import {Observable, Subject} from "rxjs";
-import {MathUtils, Matrix} from "./math.utils";
+import {MathDecorator, MathUtils, Matrix} from "./math.utils";
 
 @Injectable()
 export class DataUtils {
@@ -151,7 +151,7 @@ export class DataUtils {
               }
             }
             hiddenWeightSums[i] = sum;
-            x[inputCount + i] = MathUtils.sigmoid(hiddenWeightSums[i]);
+            x[inputCount + i] = MathDecorator.function1(hiddenWeightSums[i]);
           }
 
           //iterate by output neurons
@@ -169,11 +169,11 @@ export class DataUtils {
                 sum += w.get(i, s) * x[inputCount + j];
                 // console.log(x);
                 // console.log(x.length, " ", j, " ", inputCount + j);
-                // console.log(w.get(i, s), " ", x[inputCount + j])
+                // console.log(w.get(i, s), " ",x [inputCount + j])
               }
             }
             outputWeightSums[s] = sum;
-            currentOutput[s] = MathUtils.sigmoid(outputWeightSums[s]);
+            currentOutput[s] = MathDecorator.function2(outputWeightSums[s]);
           }
           actualOutput = [...actualOutput, ...currentOutput];
 
@@ -261,7 +261,7 @@ export class DataUtils {
             str += `\t\ti =  ${i}\n`;
             let u_i = hiddenWeightSum[i];
             str += `\t\tui =  ${u_i}\n`;
-            let d_u_i = MathUtils.dSigmoid(u_i); //fixme
+            let d_u_i = MathDecorator.derivative1(u_i); //fixme
             str += `\t\tdui =  ${d_u_i}\n`;
             let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
             str += `\t\tdab_xb =  ${dab_xb}\n`;
@@ -271,7 +271,7 @@ export class DataUtils {
                 // console.log("weights: ", w1);
                 // console.log("row: ", w1.getRow(k + this.configuration.inputCount))
                 // console.log("item: ", w1.get(k + this.configuration.inputCount, i));
-                dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
+                dab_xb += MathDecorator.derivative2(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
                 str += `\t\t\tk = ${k}, dab_xb = ${dab_xb}\n`;
               }
             }
@@ -320,8 +320,8 @@ export class DataUtils {
 
         //calculate gradient
         let gradientValue = errors[column]
-          * MathUtils.dSigmoid(outputWeightSum[column])
-          * MathUtils.sigmoid(hiddenWeightSum[row]);
+          * MathDecorator.derivative2(outputWeightSum[column])
+          * MathDecorator.function2(hiddenWeightSum[row]);
 
         gradient.set(row, column, gradientValue);
       }
@@ -349,7 +349,7 @@ export class DataUtils {
   }
 
   private getLearnRate(): number {
-    return 0.01;
+    return 0.1;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
