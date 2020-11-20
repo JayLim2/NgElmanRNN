@@ -150,8 +150,8 @@ export class DataUtils {
                 sum += w.get(j, i) * x[k];
               }
             }
-            hiddenWeightSums[i] = MathUtils.sigmoid(sum);
-            x[inputCount + i] = hiddenWeightSums[i];
+            hiddenWeightSums[i] = sum;
+            x[inputCount + i] = MathUtils.sigmoid(hiddenWeightSums[i]);
           }
 
           //iterate by output neurons
@@ -193,12 +193,12 @@ export class DataUtils {
 
           // корректировка весов
           this.updateInputWeights(this.currentEpoch, x, hiddenWeightSums, outputWeightSums, currentErrors);
-          // this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
+          this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
         if (this.currentEpoch % 10 === 0) {
           console.log(`Epoch: ${this.currentEpoch}`);
-          console.log("o: ", this._expectedOutput, " ", actualOutput, " ", e);
+          console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
         }
       }
     }
@@ -232,20 +232,39 @@ export class DataUtils {
 
     const w1: Matrix = this.inputWeights;
 
+    let str = "";
+
+    str += `epoch: ${epoch}\n` +
+      `x: ${x}\n` +
+      `hiddenWeightSum: ${hiddenWeightSum}\n`
+      + `outputWeightSum: ${outputWeightSum}\n`
+      + `errors: ${errors}\n`
+      + `weights: ${w1}\n`;
+
     // delta 1
     for (let row = 0; row < gradientRowsCount; row++) {
       for (let column = 0; column < gradientColumnsCount; column++) {
 
+        str += `${row}, ${column}\n`;
+
         //calculate gradient
         let gradientValue = 0;
         for (let s = 0; s < this.configuration.outputCount; s++) {
+          str += `\ts = ${s}\n`;
           let e_s = errors[s];
+          str += `\tes = ${e_s}\n`;
           let d_g_s = outputWeightSum[s];
+          str += `\tdgs = ${d_g_s}\n`;
           let sum = 0;
+          str += `\tsum = ${sum}\n`;
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
+            str += `\t\ti =  ${i}\n`;
             let u_i = hiddenWeightSum[i];
+            str += `\t\tui =  ${u_i}\n`;
             let d_u_i = MathUtils.dSigmoid(u_i); //fixme
+            str += `\t\tdui =  ${d_u_i}\n`;
             let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
+            str += `\t\tdab_xb =  ${dab_xb}\n`;
             if (epoch > 0) { // dv_dw(0) = 0
               for (let k = 0; k < this.configuration.hiddenCount; k++) {
                 // console.log("index: ", k + this.configuration.inputCount);
@@ -253,16 +272,25 @@ export class DataUtils {
                 // console.log("row: ", w1.getRow(k + this.configuration.inputCount))
                 // console.log("item: ", w1.get(k + this.configuration.inputCount, i));
                 dab_xb += MathUtils.dSigmoid(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
+                str += `\t\t\tk = ${k}, dab_xb = ${dab_xb}\n`;
               }
             }
             dab_xb = Math.floor(dab_xb);
+            str += `\t\t dab_xb = ${dab_xb}\n`;
             sum += d_u_i * dab_xb;
+            str += `\t\t sum = ${sum}\n`;
           }
           gradientValue += e_s * d_g_s * sum;
+          str += `\tgradient ab: ${gradientValue} \n`;
         }
         gradient.set(row, column, gradientValue);
+        str += `gradient [a][b]: ${gradient.get(row, column)}\n`;
       }
     }
+
+    str += `gradient: ${gradient}\n"============================="\n\n`;
+
+    // console.log(str);
 
     return gradient;
   }
@@ -321,7 +349,7 @@ export class DataUtils {
   }
 
   private getLearnRate(): number {
-    return 0.1;
+    return 0.01;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
@@ -350,6 +378,50 @@ export class DataUtils {
     return 0;
   }
 
+  public normalizeVector(vector: number[]): number[] {
+    let newVector = [];
+    let min = vector[0];
+    let max = vector[0];
+    for (let iter = 0; iter < 2; iter++) {
+      for (let i = 0; i < vector.length; i++) {
+        let element = vector[i];
+        if (iter === 0) {
+          if (element > max) max = element;
+          if (element < min) min = element;
+        } else if (iter === 1) {
+          let minimax = (element - min) / (max - min);
+          newVector.push(minimax)
+        }
+      }
+    }
+    return newVector;
+  }
+
+  public normalizeMatrix(matrix: Array<number[]>): Array<number[]> {
+    let newMatrix = [];
+    let min = matrix[0][0];
+    let max = matrix[0][0];
+    for (let iter = 0; iter < 2; iter++) {
+      for (let i = 0; i < matrix.length; i++) {
+        let newRow = [];
+        for (let j = 0; j < matrix[0].length; j++) {
+          let element = matrix[i][j];
+          if (iter === 0) {
+            if (element > max) max = element;
+            if (element < min) min = element;
+          } else if (iter === 1) {
+            let minimax = (element - min) / (max - min);
+            newRow.push(minimax);
+          }
+        }
+        if (iter === 1) {
+          newMatrix.push(newRow);
+        }
+      }
+    }
+    return newMatrix;
+  }
+
   public datasetToVector(): void {
     this.loading = true;
     this.loadDataset().subscribe((dataset) => {
@@ -357,7 +429,7 @@ export class DataUtils {
         .map(line => line.trim())
         .filter(line => line !== "");
       let classes = new Set();
-      let subjectParamsVector = [];
+      let subjectParamsVector: Array<number[]> = [];
       let expectedOutputVector = [];
       for (const lineStr of lines) {
         let line = lineStr.split(" ").map(value => value.trim());
@@ -369,6 +441,8 @@ export class DataUtils {
         subjectParamsVector.push(lineVector);
         expectedOutputVector.push(this.indexOf(clazz, classes));
       }
+      subjectParamsVector = this.normalizeMatrix(subjectParamsVector);
+      expectedOutputVector = this.normalizeVector(expectedOutputVector);
       this.configuration.outputCount = 1;
       this.configuration.inputCount = subjectParamsVector[0].length;
       this.configuration.hiddenCount = Math.round((this.configuration.inputCount + this.configuration.outputCount) / 2);
