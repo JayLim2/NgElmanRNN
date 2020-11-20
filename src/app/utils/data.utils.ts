@@ -14,13 +14,14 @@ export class DataUtils {
 
   private configuration = {
     epochs: 1000,
-    training: 70,
-    validation: 15,
-    testing: 15,
+    training: 80,
+    validation: 10,
+    testing: 10,
     inputCount: 0,
     contextCount: 0,
     hiddenCount: 0,
-    outputCount: 0
+    outputCount: 0,
+    normalize: true
   };
 
   private _inputWeights: Matrix = null;
@@ -52,6 +53,10 @@ export class DataUtils {
     return this._testingSamples;
   }
 
+  random(left: number, right: number): number {
+    return Math.random() * (right - left) + left;
+  }
+
   get inputWeights(): Matrix {
     if (!this._inputWeights) {
       let matrix = new Matrix(
@@ -60,9 +65,10 @@ export class DataUtils {
       );
       for (let i = 0; i < this.configuration.inputCount + this.configuration.hiddenCount; i++) {
         for (let j = 0; j < this.configuration.hiddenCount; j++) {
-          matrix.set(i, j, Math.random());
+          matrix.set(i, j, this.random(0, 1));
         }
       }
+      console.log(matrix.toString());
       this._inputWeights = matrix;
     }
     return this._inputWeights;
@@ -102,8 +108,28 @@ export class DataUtils {
   /**
    * Основной метод: запускает обучения, а затем тестирование и выводит результаты
    */
-  public run() {
-    this.train();
+  public test() {
+    let testing = [
+      [5.2, 3.5, 1.5, 0.2], //setosa
+      [4.8, 3.0, 1.4, 0.3], //setosa
+      [6.7, 3.1, 4.4, 1.4], //versicolor
+      [5.5, 2.5, 4.0, 1.3], //versicolor
+      [7.2, 3.2, 6.0, 1.8], //virginica
+      [6.5, 3.0, 5.5, 1.8], //virginica
+    ];
+    testing = this.normalizeMatrix(testing);
+    for (let i = 0; i < testing.length; i++) {
+      let name = "";
+      switch (i) {
+        case 0: case 1: name = "setosa"; break;
+        case 2: case 3: name = "versicolor"; break;
+        case 4: case 5: name = "virginica"; break;
+      }
+      console.log(name);
+      let testingSample = testing[i];
+      console.log("Input: ", testingSample);
+      this.feedWardPropagation(testingSample);
+    }
   }
 
   public currentEpoch;
@@ -133,6 +159,7 @@ export class DataUtils {
           for (let i = 0; i < inputCount; i++) {
             x[i] = currentSample[i];
           }
+          // console.log("x = ", x);
           let w: Matrix = this.inputWeights;
 
           // console.log("W: ", w.toString());
@@ -146,9 +173,7 @@ export class DataUtils {
             let sum = 0;
             for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
               // w[j][i] * x[j], взвешенная сумма i-го скрытого нейрона
-              for (let k = 0; k < x.length; k++) {
-                sum += w.get(j, i) * x[k];
-              }
+              sum += w.get(j, i) * x[j];
             }
             hiddenWeightSums[i] = sum;
             x[inputCount + i] = MathDecorator.function1(hiddenWeightSums[i]);
@@ -165,12 +190,7 @@ export class DataUtils {
             let sum = 0;
             for (let i = 0; i < this.configuration.hiddenCount; i++) {
               // w[i][s] * h[i], взвешенная сумма нейрона
-              for (let j = 0; j < this.configuration.hiddenCount; j++) {
-                sum += w.get(i, s) * x[inputCount + j];
-                // console.log(x);
-                // console.log(x.length, " ", j, " ", inputCount + j);
-                // console.log(w.get(i, s), " ",x [inputCount + j])
-              }
+              sum += w.get(i, s) * x[inputCount + i];
             }
             outputWeightSums[s] = sum;
             currentOutput[s] = MathDecorator.function2(outputWeightSums[s]);
@@ -196,9 +216,9 @@ export class DataUtils {
           this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
-        if (this.currentEpoch % 10 === 0) {
-          console.log(`Epoch: ${this.currentEpoch}`);
-          console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
+        if (this.currentEpoch % 50 === 0) {
+          // console.log(`Epoch: ${this.currentEpoch}`);
+          // console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
         }
       }
     }
@@ -231,6 +251,7 @@ export class DataUtils {
     const gradient = new Matrix(gradientRowsCount, gradientColumnsCount);
 
     const w1: Matrix = this.inputWeights;
+    const w2: Matrix = this.hiddenWeights;
 
     let str = "";
 
@@ -253,15 +274,16 @@ export class DataUtils {
           str += `\ts = ${s}\n`;
           let e_s = errors[s];
           str += `\tes = ${e_s}\n`;
-          let d_g_s = outputWeightSum[s];
-          str += `\tdgs = ${d_g_s}\n`;
+          let g_s = outputWeightSum[s];
+          let dfg_dg = MathDecorator.derivative2(g_s);
+          str += `\tdfg_dg = ${dfg_dg}\n`;
           let sum = 0;
           str += `\tsum = ${sum}\n`;
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
             str += `\t\ti =  ${i}\n`;
             let u_i = hiddenWeightSum[i];
             str += `\t\tui =  ${u_i}\n`;
-            let d_u_i = MathDecorator.derivative1(u_i); //fixme
+            let d_u_i = MathDecorator.derivative1(u_i);
             str += `\t\tdui =  ${d_u_i}\n`;
             let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
             str += `\t\tdab_xb =  ${dab_xb}\n`;
@@ -275,12 +297,12 @@ export class DataUtils {
                 str += `\t\t\tk = ${k}, dab_xb = ${dab_xb}\n`;
               }
             }
-            dab_xb = Math.floor(dab_xb);
+            // dab_xb = Math.floor(dab_xb);
             str += `\t\t dab_xb = ${dab_xb}\n`;
-            sum += d_u_i * dab_xb;
+            sum += d_u_i * dab_xb * w2.get(i, s);
             str += `\t\t sum = ${sum}\n`;
           }
-          gradientValue += e_s * d_g_s * sum;
+          gradientValue += e_s * dfg_dg * sum;
           str += `\tgradient ab: ${gradientValue} \n`;
         }
         gradient.set(row, column, gradientValue);
@@ -302,6 +324,7 @@ export class DataUtils {
     const gradient: Matrix = this.getHiddenWeightsGradient(hiddenWeightSum, outputWeightSum, errors);
     const weights: Matrix = this.hiddenWeights;
     const learnRate: number = this.getLearnRate();
+    // console.log("gradient H: \n", gradient.toString());
     this.updateWeights(gradient, weights, learnRate);
   }
 
@@ -334,14 +357,42 @@ export class DataUtils {
     const {rowsCount, columnsCount} = weights.size();
     for (let i = 0; i < rowsCount; i++) {
       for (let j = 0; j < columnsCount; j++) {
-        let newWeight = weights.get(i, j) - learnRate * gradient.get(i, j);
+        let newWeight = weights.get(i, j) + learnRate * gradient.get(i, j);
         weights.set(i, j, newWeight);
       }
     }
   }
 
-  public feedWardPropagation() {
+  public feedWardPropagation(x: number[]) {
+    const inputCount = x.length;
 
+    x = [...x, ...Array(this.configuration.contextCount).fill(0)];
+
+    console.log("x = ", x);
+
+    //iterate by hidden neurons
+    let w: Matrix = this.inputWeights;
+    let hiddenWeightSums = [];
+    for (let i = 0; i < this.configuration.hiddenCount; i++) {
+      let sum = 0;
+      for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
+        sum += w.get(j, i) * x[j];
+      }
+      x[inputCount + i] = MathDecorator.function1(sum);
+    }
+
+    //iterate by output neurons
+    w = this.hiddenWeights;
+    let currentOutput = [];
+    for (let s = 0; s < this.configuration.outputCount; s++) {
+      let sum = 0;
+      for (let i = 0; i < this.configuration.hiddenCount; i++) {
+        sum += w.get(i, s) * x[inputCount + i];
+      }
+      currentOutput[s] = MathDecorator.function2(sum);
+    }
+
+    console.log("Output: ", currentOutput);
   }
 
   public backWardPropagation() {
@@ -349,20 +400,56 @@ export class DataUtils {
   }
 
   private getLearnRate(): number {
-    return 0.1;
+    return 0.2;
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
     if (samples && samples.length > 0 && yTrue && yTrue.length > 0) {
-      let length = samples.length;
-      let trainingLength = this.getNewLength(length, this.configuration.training);
-      let validationLength = this.getNewLength(length, this.configuration.validation);
-      //samples
-      this._trainingSamples = samples.slice(0, trainingLength);
-      this._validationSamples = samples.slice(trainingLength, trainingLength + validationLength);
-      this._testingSamples = samples.slice(trainingLength + validationLength, length);
-      //output
-      this._expectedOutput = yTrue.slice(0, trainingLength).map(y => [y]);
+      const classes = [
+        50, //setosa
+        49, //versicolor,
+        51, //virginica
+      ];
+
+      let trainingSamples = [];
+      let validationSamples = [];
+      let testingSamples = [];
+      let expectedOutput = [];
+
+      let handled = 0;
+      for (let i = 0; i < classes.length; i++) {
+        let count = classes[i];
+        let samplesByClass = samples.slice(handled, handled + count);
+        let yTrueByClass = yTrue.slice(handled, handled + count);
+        handled += count;
+
+        let length = samplesByClass.length;
+        let trainingLength = this.getNewLength(length, this.configuration.training);
+        let validationLength = this.getNewLength(length, this.configuration.validation);
+        //samples
+        trainingSamples = [
+          ...trainingSamples,
+          ...samplesByClass.slice(0, trainingLength)
+        ];
+        validationSamples = [
+          ...validationSamples,
+          ...samplesByClass.slice(trainingLength, trainingLength + validationLength)
+        ];
+        testingSamples = [
+          ...testingSamples,
+          ...samplesByClass.slice(trainingLength + validationLength, length)
+        ];
+        //output
+        expectedOutput = [
+          ...expectedOutput,
+          ...yTrueByClass.slice(0, trainingLength).map(y => [y])
+        ];
+      }
+
+      this._trainingSamples = trainingSamples;
+      this._validationSamples = validationSamples;
+      this._testingSamples = testingSamples;
+      this._expectedOutput = expectedOutput;
 
       // console.log(this._trainingSamples);
       // console.log(this._validationSamples);
@@ -379,47 +466,53 @@ export class DataUtils {
   }
 
   public normalizeVector(vector: number[]): number[] {
-    let newVector = [];
-    let min = vector[0];
-    let max = vector[0];
-    for (let iter = 0; iter < 2; iter++) {
-      for (let i = 0; i < vector.length; i++) {
-        let element = vector[i];
-        if (iter === 0) {
-          if (element > max) max = element;
-          if (element < min) min = element;
-        } else if (iter === 1) {
-          let minimax = (element - min) / (max - min);
-          newVector.push(minimax)
-        }
-      }
-    }
-    return newVector;
-  }
-
-  public normalizeMatrix(matrix: Array<number[]>): Array<number[]> {
-    let newMatrix = [];
-    let min = matrix[0][0];
-    let max = matrix[0][0];
-    for (let iter = 0; iter < 2; iter++) {
-      for (let i = 0; i < matrix.length; i++) {
-        let newRow = [];
-        for (let j = 0; j < matrix[0].length; j++) {
-          let element = matrix[i][j];
+    if (this.configuration.normalize) {
+      let newVector = [];
+      let min = vector[0];
+      let max = vector[0];
+      for (let iter = 0; iter < 2; iter++) {
+        for (let i = 0; i < vector.length; i++) {
+          let element = vector[i];
           if (iter === 0) {
             if (element > max) max = element;
             if (element < min) min = element;
           } else if (iter === 1) {
             let minimax = (element - min) / (max - min);
-            newRow.push(minimax);
+            newVector.push(minimax)
           }
         }
-        if (iter === 1) {
-          newMatrix.push(newRow);
+      }
+      return newVector;
+    }
+    return vector;
+  }
+
+  public normalizeMatrix(matrix: Array<number[]>): Array<number[]> {
+    if (this.configuration.normalize) {
+      let newMatrix = [];
+      let min = matrix[0][0];
+      let max = matrix[0][0];
+      for (let iter = 0; iter < 2; iter++) {
+        for (let i = 0; i < matrix.length; i++) {
+          let newRow = [];
+          for (let j = 0; j < matrix[0].length; j++) {
+            let element = matrix[i][j];
+            if (iter === 0) {
+              if (element > max) max = element;
+              if (element < min) min = element;
+            } else if (iter === 1) {
+              let minimax = (element - min) / (max - min);
+              newRow.push(minimax);
+            }
+          }
+          if (iter === 1) {
+            newMatrix.push(newRow);
+          }
         }
       }
+      return newMatrix;
     }
-    return newMatrix;
+    return matrix;
   }
 
   public datasetToVector(): void {

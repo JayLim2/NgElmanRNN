@@ -37,15 +37,14 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.dataUtils.datasetToVector();
-    this.dataUtils.currentEpoch$
-      .subscribe((val) => {
-        this.progress = this.dataUtils.getProgress(val as number);
-        this.cdr.detectChanges();
-      })
   }
 
   onTrain() {
     this.dataUtils.train();
+  }
+
+  onTest() {
+    this.dataUtils.test();
   }
 
 }
