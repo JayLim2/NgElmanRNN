@@ -7,7 +7,6 @@ import {MathDecorator, MathUtils, Matrix} from "./math.utils";
 export class DataUtils {
 
   private _trainingSamples: Array<number[]>;
-  private _validationSamples: Array<number[]>;
   private _testingSamples: Array<number[]>;
 
   private _expectedOutput: Array<number[]>;
@@ -15,8 +14,7 @@ export class DataUtils {
   private configuration = {
     epochs: 1000,
     training: 80,
-    validation: 10,
-    testing: 10,
+    testing: 0,
     inputCount: 0,
     contextCount: 0,
     hiddenCount: 0,
@@ -45,10 +43,6 @@ export class DataUtils {
     return this._trainingSamples;
   }
 
-  get validationSamples(): Array<number[]> {
-    return this._validationSamples;
-  }
-
   get testingSamples(): Array<number[]> {
     return this._testingSamples;
   }
@@ -68,7 +62,7 @@ export class DataUtils {
           matrix.set(i, j, this.random(0, 1));
         }
       }
-      console.log(matrix.toString());
+      // console.log(matrix.toString());
       this._inputWeights = matrix;
     }
     return this._inputWeights;
@@ -90,19 +84,18 @@ export class DataUtils {
     return this._hiddenWeights;
   }
 
-  public configure(epochs: number = 1000, training: number = 70, validation: number = 15) {
+  public configure(epochs: number = 1000, training: number = 70) {
     if (epochs <= 0) {
       throw new Error("Epochs count must be greater than 0.");
     }
-    if (training <= 0 || validation <= 0) {
+    if (training <= 0) {
       throw new Error("Samples size must be greater than 0.");
     }
-    if (training + validation > 99) {
-      throw new Error("Training, testing and validation percents must summary equals 100.");
+    if (training > 99) {
+      throw new Error("Training and testing percents must summary equals 100.");
     }
     this.configuration.training = training;
-    this.configuration.validation = validation;
-    this.configuration.testing = 100 - training - validation;
+    this.configuration.testing = 100 - training;
   }
 
   /**
@@ -118,15 +111,19 @@ export class DataUtils {
       [6.5, 3.0, 5.5, 1.8], //virginica
     ];
     testing = this.normalizeMatrix(testing);
+    testing = this.testingSamples;
+    alert(testing.length);
     for (let i = 0; i < testing.length; i++) {
       let name = "";
-      switch (i) {
-        case 0: case 1: name = "setosa"; break;
-        case 2: case 3: name = "versicolor"; break;
-        case 4: case 5: name = "virginica"; break;
+      if (i >= 0 && i <= 10) {
+        name = "setosa";
+      } else if(i >= 11 && i < 20) {
+        name = "versicolor";
+      } else if(i >= 21) {
+        name = "virginica";
       }
-      console.log(name);
       let testingSample = testing[i];
+      console.log(name);
       console.log("Input: ", testingSample);
       this.feedWardPropagation(testingSample);
     }
@@ -232,6 +229,11 @@ export class DataUtils {
                             outputWeightSum: number[],
                             errors: number[]) {
 
+    // console.log(x);
+    // console.log(errors);
+    // console.log("===");
+
+
     const gradient: Matrix = this.getInputWeightsGradient(epoch, x, hiddenWeightSum, outputWeightSum, errors);
     const weights: Matrix = this.inputWeights;
     const learnRate: number = this.getLearnRate();
@@ -279,27 +281,29 @@ export class DataUtils {
           str += `\tdfg_dg = ${dfg_dg}\n`;
           let sum = 0;
           str += `\tsum = ${sum}\n`;
-          for (let i = 0; i < this.configuration.hiddenCount; i++) {
-            str += `\t\ti =  ${i}\n`;
-            let u_i = hiddenWeightSum[i];
-            str += `\t\tui =  ${u_i}\n`;
-            let d_u_i = MathDecorator.derivative1(u_i);
-            str += `\t\tdui =  ${d_u_i}\n`;
-            let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
-            str += `\t\tdab_xb =  ${dab_xb}\n`;
-            if (epoch > 0) { // dv_dw(0) = 0
+          if (epoch > 0) { // dv_dw(0) = 0
+            for (let i = 0; i < this.configuration.hiddenCount; i++) {
               for (let k = 0; k < this.configuration.hiddenCount; k++) {
+                str += `\t\ti =  ${i}\n`;
+                let u_i = hiddenWeightSum[i];
+                str += `\t\tui =  ${u_i}\n`;
+                let d_u_i = MathDecorator.derivative1(u_i);
+                str += `\t\tdui =  ${d_u_i}\n`;
+                let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
+                str += `\t\tdab_xb =  ${dab_xb}\n`;
+
                 // console.log("index: ", k + this.configuration.inputCount);
                 // console.log("weights: ", w1);
                 // console.log("row: ", w1.getRow(k + this.configuration.inputCount))
                 // console.log("item: ", w1.get(k + this.configuration.inputCount, i));
                 dab_xb += MathDecorator.derivative2(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
                 str += `\t\t\tk = ${k}, dab_xb = ${dab_xb}\n`;
+                sum += d_u_i * dab_xb * w2.get(i, s);
+
               }
             }
             // dab_xb = Math.floor(dab_xb);
-            str += `\t\t dab_xb = ${dab_xb}\n`;
-            sum += d_u_i * dab_xb * w2.get(i, s);
+            // str += `\t\t dab_xb = ${dab_xb}\n`;
             str += `\t\t sum = ${sum}\n`;
           }
           gradientValue += e_s * dfg_dg * sum;
@@ -368,11 +372,8 @@ export class DataUtils {
 
     x = [...x, ...Array(this.configuration.contextCount).fill(0)];
 
-    console.log("x = ", x);
-
     //iterate by hidden neurons
     let w: Matrix = this.inputWeights;
-    let hiddenWeightSums = [];
     for (let i = 0; i < this.configuration.hiddenCount; i++) {
       let sum = 0;
       for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
@@ -412,7 +413,6 @@ export class DataUtils {
       ];
 
       let trainingSamples = [];
-      let validationSamples = [];
       let testingSamples = [];
       let expectedOutput = [];
 
@@ -425,20 +425,16 @@ export class DataUtils {
 
         let length = samplesByClass.length;
         let trainingLength = this.getNewLength(length, this.configuration.training);
-        let validationLength = this.getNewLength(length, this.configuration.validation);
         //samples
         trainingSamples = [
           ...trainingSamples,
           ...samplesByClass.slice(0, trainingLength)
         ];
-        validationSamples = [
-          ...validationSamples,
-          ...samplesByClass.slice(trainingLength, trainingLength + validationLength)
-        ];
         testingSamples = [
           ...testingSamples,
-          ...samplesByClass.slice(trainingLength + validationLength, length)
+          ...samplesByClass.slice(trainingLength, length)
         ];
+        // console.log("class: ", ...samplesByClass.slice(trainingLength, length));
         //output
         expectedOutput = [
           ...expectedOutput,
@@ -447,12 +443,10 @@ export class DataUtils {
       }
 
       this._trainingSamples = trainingSamples;
-      this._validationSamples = validationSamples;
       this._testingSamples = testingSamples;
       this._expectedOutput = expectedOutput;
 
       // console.log(this._trainingSamples);
-      // console.log(this._validationSamples);
       // console.log(this._testingSamples);
       // console.log(this._expectedOutput);
     }
