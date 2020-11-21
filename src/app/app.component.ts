@@ -45,8 +45,8 @@ export class AppComponent implements OnInit {
     })
   }
 
-  onTrain() {
-    this.dataUtils.train();
+  onTrain(moment: boolean = false) {
+    this.dataUtils.train(moment);
   }
 
   onTest() {

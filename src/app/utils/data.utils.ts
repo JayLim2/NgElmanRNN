@@ -19,7 +19,8 @@ export class DataUtils {
     contextCount: 0,
     hiddenCount: 0,
     outputCount: 0,
-    normalize: true
+    normalize: true,
+    moment: true
   };
 
   output: string = "";
@@ -32,6 +33,15 @@ export class DataUtils {
 
   public training: boolean = false;
   public trained: boolean = false;
+
+  public lineChartData = [{
+    data: [],
+    label: 'Error'
+  }];
+  public lineChartLabels = [];
+
+  private lastDeltaW1: Matrix = null;
+  private lastDeltaW2: Matrix = null;
 
   constructor(
     private http: HttpClient
@@ -140,7 +150,13 @@ export class DataUtils {
 
   public currentEpoch$ = this.currentEpochSubject.asObservable();
 
-  public train() {
+  public train(moment: boolean = false) {
+    this.configuration.moment = moment;
+    if (this.configuration.moment) {
+      this.lastDeltaW1 = null;
+      this.lastDeltaW2 = null;
+    }
+
     this._inputWeights = null;
     this._hiddenWeights = null;
     this.output = "";
@@ -243,12 +259,6 @@ export class DataUtils {
     console.log("w2: ", this.hiddenWeights.toString());
   }
 
-  public lineChartData = [{
-    data: [],
-    label: 'Error'
-  }];
-  public lineChartLabels = [];
-
   public updateInputWeights(epoch: number = 0,
                             x: number[],
                             hiddenWeightSum: number[],
@@ -264,7 +274,15 @@ export class DataUtils {
     const weights: Matrix = this.inputWeights;
     const learnRate: number = this.getLearnRate();
     // console.log("gradient: \n", gradient.toString());
-    this.updateWeights(gradient, weights, learnRate);
+    if (!this.lastDeltaW1) {
+      this.lastDeltaW1 = new Matrix(weights.size().rowsCount, weights.size().columnsCount);
+      for (let i = 0; i < this.lastDeltaW1.size().rowsCount; i++) {
+        for (let j = 0; j < this.lastDeltaW1.size().columnsCount; j++) {
+          this.lastDeltaW1.set(i, j, 0);
+        }
+      }
+    }
+    this.updateWeights("input", gradient, weights, learnRate);
   }
 
   private getInputWeightsGradient(epoch: number,
@@ -355,7 +373,15 @@ export class DataUtils {
     const weights: Matrix = this.hiddenWeights;
     const learnRate: number = this.getLearnRate();
     // console.log("gradient H: \n", gradient.toString());
-    this.updateWeights(gradient, weights, learnRate);
+    if (!this.lastDeltaW2) {
+      this.lastDeltaW2 = new Matrix(weights.size().rowsCount, weights.size().columnsCount);
+      for (let i = 0; i < this.lastDeltaW2.size().rowsCount; i++) {
+        for (let j = 0; j < this.lastDeltaW2.size().columnsCount; j++) {
+          this.lastDeltaW2.set(i, j, 0);
+        }
+      }
+    }
+    this.updateWeights("hidden", gradient, weights, learnRate);
   }
 
   private getHiddenWeightsGradient(hiddenWeightSum: number[],
@@ -383,11 +409,25 @@ export class DataUtils {
     return gradient;
   }
 
-  private updateWeights(gradient: Matrix, weights: Matrix, learnRate: number) {
+  private alpha(): number {
+    return 0.1;
+  }
+
+  private updateWeights(name: string, gradient: Matrix, weights: Matrix, learnRate: number) {
     const {rowsCount, columnsCount} = weights.size();
     for (let i = 0; i < rowsCount; i++) {
       for (let j = 0; j < columnsCount; j++) {
-        let newWeight = weights.get(i, j) + learnRate * gradient.get(i, j);
+        let oldWeight = weights.get(i, j);
+        let newWeight = oldWeight + learnRate * gradient.get(i, j);
+        if (this.configuration.moment) {
+          if (name === "input") {
+            newWeight += this.alpha() * this.lastDeltaW1.get(i, j);
+            this.lastDeltaW1.set(i, j, newWeight - oldWeight);
+          } else if(name === "hidden") {
+            newWeight += this.alpha() * this.lastDeltaW2.get(i, j);
+            this.lastDeltaW2.set(i, j, newWeight - oldWeight);
+          }
+        }
         weights.set(i, j, newWeight);
       }
     }
