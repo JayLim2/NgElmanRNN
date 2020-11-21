@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, Input, OnInit} from '@angular/core';
 import {DataUtils} from "./utils/data.utils";
 
 /*
@@ -29,6 +29,9 @@ export class AppComponent implements OnInit {
 
   public progress = "";
 
+  @Input()
+  public output: string = null;
+
   constructor(
     public dataUtils: DataUtils,
     public cdr: ChangeDetectorRef
@@ -37,6 +40,9 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.dataUtils.datasetToVector();
+    this.dataUtils.outputS.asObservable().subscribe((value) => {
+      this.output = value;
+    })
   }
 
   onTrain() {

@@ -5,7 +5,7 @@ export class MathDecorator {
   }
 
   public static function2(x: number): number {
-    return MathUtils.tanh(x);
+    return MathUtils.sigmoid(x);
   }
 
   public static derivative1(x: number): number {
@@ -13,7 +13,7 @@ export class MathDecorator {
   }
 
   public static derivative2(x: number): number {
-    return MathUtils.dTanh(x);
+    return MathUtils.dSigmoid(x);
   }
 
 }
@@ -63,7 +63,7 @@ export class MathUtils {
     for (let i = 0; i < n; i++) {
       standardDeviation += Math.pow((array[i] - mean), 2);
     }
-    standardDeviation *= (1/(n - 1));
+    standardDeviation /= (n - 1);
     standardDeviation = Math.sqrt(standardDeviation);
     return standardDeviation;
   }

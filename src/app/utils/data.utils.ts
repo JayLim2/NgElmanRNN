@@ -12,7 +12,7 @@ export class DataUtils {
   private _expectedOutput: Array<number[]>;
 
   private configuration = {
-    epochs: 1000,
+    epochs: 2000,
     training: 80,
     testing: 0,
     inputCount: 0,
@@ -21,6 +21,9 @@ export class DataUtils {
     outputCount: 0,
     normalize: true
   };
+
+  output: string = "";
+  outputS: Subject<string> = new Subject<string>();
 
   private _inputWeights: Matrix = null;
   private _hiddenWeights: Matrix = null;
@@ -112,19 +115,21 @@ export class DataUtils {
     ];
     testing = this.normalizeMatrix(testing);
     testing = this.testingSamples;
-    alert(testing.length);
     for (let i = 0; i < testing.length; i++) {
       let name = "";
       if (i >= 0 && i <= 10) {
         name = "setosa";
-      } else if(i >= 11 && i < 20) {
+      } else if (i >= 11 && i < 20) {
         name = "versicolor";
-      } else if(i >= 21) {
+      } else if (i >= 21) {
         name = "virginica";
       }
       let testingSample = testing[i];
-      console.log(name);
-      console.log("Input: ", testingSample);
+
+      this.output += `${name}\ninput: ${testingSample}\n`;
+      this.outputS.next(this.output);
+      // console.log(name);
+      // console.log("Input: ", testingSample);
       this.feedWardPropagation(testingSample);
     }
   }
@@ -136,6 +141,14 @@ export class DataUtils {
   public currentEpoch$ = this.currentEpochSubject.asObservable();
 
   public train() {
+    this._inputWeights = null;
+    this._hiddenWeights = null;
+    this.output = "";
+    this.outputS.next(this.output);
+    this.currentEpoch = 0;
+    this.lineChartData[0].data = [];
+    this.lineChartLabels = [];
+
     this.training = true;
     const epochs = this.configuration.epochs;
     if (epochs > 0) {
@@ -213,17 +226,21 @@ export class DataUtils {
           this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
+        // this.lineChartData[0].data.push(e[0]);
         this.lineChartData[0].data.push(MathUtils.standardDeviation(e));
         this.lineChartLabels.push(`${this.currentEpoch}`);
 
         if (this.currentEpoch % 50 === 0) {
-          console.log(`Epoch: ${this.currentEpoch}`);
-          console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
+          // console.log(`Epoch: ${this.currentEpoch}`);
+          // console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
         }
       }
     }
     this.training = false;
     this.trained = true;
+
+    console.log("w1: ", this.inputWeights.toString());
+    console.log("w2: ", this.hiddenWeights.toString());
   }
 
   public lineChartData = [{
@@ -383,6 +400,7 @@ export class DataUtils {
 
     //iterate by hidden neurons
     let w: Matrix = this.inputWeights;
+    console.log("w1: ", w.toString());
     for (let i = 0; i < this.configuration.hiddenCount; i++) {
       let sum = 0;
       for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
@@ -393,6 +411,7 @@ export class DataUtils {
 
     //iterate by output neurons
     w = this.hiddenWeights;
+    console.log("w2: ", w.toString());
     let currentOutput = [];
     for (let s = 0; s < this.configuration.outputCount; s++) {
       let sum = 0;
@@ -402,7 +421,9 @@ export class DataUtils {
       currentOutput[s] = MathDecorator.function2(sum);
     }
 
-    console.log("Output: ", currentOutput);
+    this.output += `output: ${currentOutput}\n\n`;
+    this.outputS.next(this.output);
+    // console.log("Output: ", currentOutput);
   }
 
   public backWardPropagation() {

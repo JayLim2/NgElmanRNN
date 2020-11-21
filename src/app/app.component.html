@@ -1,29 +1,37 @@
 <p>{{title}}</p>
 
-<div>
-  <ng-container *ngIf="!dataUtils.trainingSamples && dataUtils.loading; else train">
-    Preparing data...
-  </ng-container>
-
-  <ng-container *ngIf="dataUtils.training && !dataUtils.trained; else trained">
-    Training... {{progress}}
-  </ng-container>
-  <ng-template #trained>
-    <ng-container *ngIf="dataUtils.trained">
-      Trained successfully.
+<div style="display: flex;">
+  <div>
+    <ng-container *ngIf="!dataUtils.trainingSamples && dataUtils.loading; else train">
+      Preparing data...
     </ng-container>
-  </ng-template>
 
-  <ng-template #train>
-    <button (click)="onTrain()">
-      Train
-    </button>
-    <button (click)="onTest()">
-      Test
-    </button>
-  </ng-template>
+    <ng-container *ngIf="dataUtils.training && !dataUtils.trained; else trained">
+      Training... {{progress}}
+    </ng-container>
+    <ng-template #trained>
+      <ng-container *ngIf="dataUtils.trained">
+        Trained successfully.
+      </ng-container>
+    </ng-template>
 
-  <errors-chart [lineChartData]="dataUtils.lineChartData"
-                [lineChartLabels]="dataUtils.lineChartLabels"
-  ></errors-chart>
+    <ng-template #train>
+      <button (click)="onTrain()">
+        Train
+      </button>
+      <button (click)="onTest()">
+        Test
+      </button>
+    </ng-template>
+
+    <errors-chart [lineChartData]="dataUtils.lineChartData"
+                  [lineChartLabels]="dataUtils.lineChartLabels"
+    ></errors-chart>
+  </div>
+  <div style="padding-left: 10px;width: 50%">
+    Output:
+    <textarea style="width: 100%; height: 100%; resize: none"
+              readonly
+    >{{output}}</textarea>
+  </div>
 </div>
