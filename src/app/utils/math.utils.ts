@@ -49,6 +49,24 @@ export class MathUtils {
   public static kroneckerDelta(i: number, j: number): number {
     return i == j ? 1 : 0;
   }
+
+  public static standardDeviation(array: number[]): number {
+    let n = array.length;
+
+    let mean = 0;
+    for (let i = 0; i < n; i++) {
+      mean += array[i];
+    }
+    mean /= n;
+
+    let standardDeviation = 0;
+    for (let i = 0; i < n; i++) {
+      standardDeviation += Math.pow((array[i] - mean), 2);
+    }
+    standardDeviation *= (1/(n - 1));
+    standardDeviation = Math.sqrt(standardDeviation);
+    return standardDeviation;
+  }
 }
 
 export class Matrix {

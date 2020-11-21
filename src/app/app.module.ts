@@ -5,15 +5,19 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import {HttpClientModule} from "@angular/common/http";
 import {DataUtils} from "./utils/data.utils";
+import { ErrorsChartComponent } from './errors-chart/errors-chart.component';
+import {ChartsModule} from "ng2-charts";
 
 @NgModule({
   declarations: [
-    AppComponent
+    AppComponent,
+    ErrorsChartComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
-    HttpClientModule
+    HttpClientModule,
+    ChartsModule
   ],
   providers: [DataUtils],
   bootstrap: [AppComponent]

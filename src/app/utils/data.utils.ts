@@ -213,15 +213,24 @@ export class DataUtils {
           this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
+        this.lineChartData[0].data.push(MathUtils.standardDeviation(e));
+        this.lineChartLabels.push(`${this.currentEpoch}`);
+
         if (this.currentEpoch % 50 === 0) {
-          // console.log(`Epoch: ${this.currentEpoch}`);
-          // console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
+          console.log(`Epoch: ${this.currentEpoch}`);
+          console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
         }
       }
     }
     this.training = false;
     this.trained = true;
   }
+
+  public lineChartData = [{
+    data: [],
+    label: 'Error'
+  }];
+  public lineChartLabels = [];
 
   public updateInputWeights(epoch: number = 0,
                             x: number[],
