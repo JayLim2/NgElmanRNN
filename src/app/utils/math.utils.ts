@@ -5,7 +5,7 @@ export class MathDecorator {
   }
 
   public static function2(x: number): number {
-    return MathUtils.sigmoid(x);
+    return MathUtils.tanh(x);
   }
 
   public static derivative1(x: number): number {
@@ -13,7 +13,7 @@ export class MathDecorator {
   }
 
   public static derivative2(x: number): number {
-    return MathUtils.dSigmoid(x);
+    return MathUtils.dTanh(x);
   }
 
 }
@@ -33,7 +33,7 @@ export class MathUtils {
   }
 
   public static dTanh(x: number): number {
-    return 1 / Math.pow(Math.cosh(x), 2);
+    return 1 - Math.pow(this.tanh(x), 2);
   }
 
   public static mseLoss(yTrue: number[], yPred: number[]): number {
