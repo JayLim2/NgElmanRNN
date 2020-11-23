@@ -12,22 +12,22 @@ export class DataUtils {
   private _expectedOutput: Array<number[]>;
 
   private configuration = {
-    epochs: 2000,
-    training: 80,
+    epochs: 700,
+    training: 90,
     testing: 0,
     inputCount: 0,
     contextCount: 0,
     hiddenCount: 0,
     outputCount: 0,
-    normalize: true,
-    moment: true
+    normalize: false,
+    moment: false
   };
 
   output: string = "";
   outputS: Subject<string> = new Subject<string>();
 
-  private _inputWeights: Matrix = null;
   private _hiddenWeights: Matrix = null;
+  private _outputWeights: Matrix = null;
 
   public loading: boolean = false;
 
@@ -56,16 +56,12 @@ export class DataUtils {
     return this._trainingSamples;
   }
 
-  get testingSamples(): Array<number[]> {
-    return this._testingSamples;
-  }
-
   random(left: number, right: number): number {
     return Math.random() * (right - left) + left;
   }
 
-  get inputWeights(): Matrix {
-    if (!this._inputWeights) {
+  get hiddenWeights(): Matrix {
+    if (!this._hiddenWeights) {
       let matrix = new Matrix(
         this.configuration.inputCount + this.configuration.contextCount,
         this.configuration.hiddenCount
@@ -75,14 +71,13 @@ export class DataUtils {
           matrix.set(i, j, this.random(0, 1));
         }
       }
-      // console.log(matrix.toString());
-      this._inputWeights = matrix;
+      this._hiddenWeights = matrix;
     }
-    return this._inputWeights;
+    return this._hiddenWeights;
   }
 
-  get hiddenWeights(): Matrix {
-    if (!this._hiddenWeights) {
+  get outputWeights(): Matrix {
+    if (!this._outputWeights) {
       let matrix = new Matrix(
         this.configuration.hiddenCount,
         this.configuration.outputCount
@@ -92,9 +87,9 @@ export class DataUtils {
           matrix.set(i, j, Math.random());
         }
       }
-      this._hiddenWeights = matrix;
+      this._outputWeights = matrix;
     }
-    return this._hiddenWeights;
+    return this._outputWeights;
   }
 
   public configure(epochs: number = 1000, training: number = 70) {
@@ -115,32 +110,15 @@ export class DataUtils {
    * Основной метод: запускает обучения, а затем тестирование и выводит результаты
    */
   public test() {
-    let testing = [
-      [5.2, 3.5, 1.5, 0.2], //setosa
-      [4.8, 3.0, 1.4, 0.3], //setosa
-      [6.7, 3.1, 4.4, 1.4], //versicolor
-      [5.5, 2.5, 4.0, 1.3], //versicolor
-      [7.2, 3.2, 6.0, 1.8], //virginica
-      [6.5, 3.0, 5.5, 1.8], //virginica
-    ];
-    testing = this.normalizeMatrix(testing);
-    testing = this.testingSamples;
-    for (let i = 0; i < testing.length; i++) {
-      let name = "";
-      if (i >= 0 && i <= 10) {
-        name = "setosa";
-      } else if (i >= 11 && i < 20) {
-        name = "versicolor";
-      } else if (i >= 21) {
-        name = "virginica";
+    let testing = this.testingByClass;
+    for (const className of Object.keys(testing)) {
+      let byClass = testing[className];
+      for (let i = 0; i < byClass.length; i++) {
+        let testingSample = byClass[i];
+        this.output += `${className}\ninput: ${testingSample}\n`;
+        this.outputS.next(this.output);
+        this.feedWardPropagation(testingSample, className);
       }
-      let testingSample = testing[i];
-
-      this.output += `${name}\ninput: ${testingSample}\n`;
-      this.outputS.next(this.output);
-      // console.log(name);
-      // console.log("Input: ", testingSample);
-      this.feedWardPropagation(testingSample);
     }
   }
 
@@ -157,8 +135,8 @@ export class DataUtils {
       this.lastDeltaW2 = null;
     }
 
-    this._inputWeights = null;
     this._hiddenWeights = null;
+    this._outputWeights = null;
     this.output = "";
     this.outputS.next(this.output);
     this.currentEpoch = 0;
@@ -175,30 +153,25 @@ export class DataUtils {
       for (this.currentEpoch = 0; this.currentEpoch < epochs; this.currentEpoch++) {
         this.currentEpochSubject.next(this.currentEpoch);
         let x: number[] = Array(inputCount + contextCount).fill(0);
-        // console.log(inputCount, " ", contextCount);
-        // console.log("X = ", x);
         //iterate by training samples
         let actualOutput = [];
         let e = [];
         for (let index = 0; index < this.trainingSamples.length; index++) {
-          let currentSample: number[] = this.trainingSamples[index]; // vector, [x1, x2, x3, x4]
+          if(this.hiddenWeights.containsNaN() || this.outputWeights.containsNaN()) {
+            console.error("NaN detected.");
+            return;
+          }
+          let currentSample: number[] = this.trainingSamples[index];
           for (let i = 0; i < inputCount; i++) {
             x[i] = currentSample[i];
           }
-          // console.log("x = ", x);
-          let w: Matrix = this.inputWeights;
-
-          // console.log("W: ", w.toString());
+          let w: Matrix = this.hiddenWeights;
 
           //iterate by hidden neurons
           let hiddenWeightSums = [];
           for (let i = 0; i < this.configuration.hiddenCount; i++) {
-            /*
-            на вход h[i] приходит [x1, x2, x3, x4, h1, h2, h3] и веса [[w1, w2, w3], [...]]
-             */
             let sum = 0;
             for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
-              // w[j][i] * x[j], взвешенная сумма i-го скрытого нейрона
               sum += w.get(j, i) * x[j];
             }
             hiddenWeightSums[i] = sum;
@@ -206,74 +179,59 @@ export class DataUtils {
           }
 
           //iterate by output neurons
-          w = this.hiddenWeights;
+          w = this.outputWeights;
           let outputWeightSums = [];
-          let currentOutput = [];
+          let sampleOutput = [];
           for (let s = 0; s < this.configuration.outputCount; s++) {
-            /*
-            на вход o[s] приходит [h1, h2, h3] и веса
-             */
             let sum = 0;
             for (let i = 0; i < this.configuration.hiddenCount; i++) {
-              // w[i][s] * h[i], взвешенная сумма нейрона
               sum += w.get(i, s) * x[inputCount + i];
             }
             outputWeightSums[s] = sum;
-            currentOutput[s] = MathDecorator.function2(outputWeightSums[s]);
+            sampleOutput[s] = MathDecorator.function2(outputWeightSums[s]);
           }
-          actualOutput = [...actualOutput, ...currentOutput];
+          actualOutput = [...actualOutput, sampleOutput];
 
           //error
           let currentErrors = [];
           let resultError = 0;
           for (let i = 0; i < this.configuration.outputCount; i++) {
-            let error = this._expectedOutput[index][i] - currentOutput[i];
-            currentErrors.push(error);
+            let error = this._expectedOutput[index][i] - sampleOutput[i];
+            currentErrors[i] = error;
             resultError += Math.pow(error, 2);
           }
-          resultError = resultError / 2;
 
           if (resultError) {
             e.push(resultError);
           }
 
           // корректировка весов
-          this.updateInputWeights(this.currentEpoch, x, hiddenWeightSums, outputWeightSums, currentErrors);
-          this.updateHiddenWeights(hiddenWeightSums, outputWeightSums, currentErrors);
+          this.updateHiddenWeights(this.currentEpoch, x, hiddenWeightSums, outputWeightSums, currentErrors);
+          this.updateOutputWeights(hiddenWeightSums, outputWeightSums, currentErrors);
         }
 
-        // this.lineChartData[0].data.push(e[0]);
         this.lineChartData[0].data.push(MathUtils.standardDeviation(e));
         this.lineChartLabels.push(`${this.currentEpoch}`);
 
         if (this.currentEpoch % 50 === 0) {
-          // console.log(`Epoch: ${this.currentEpoch}`);
-          // console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
+          console.log(`Epoch: ${this.currentEpoch}`);
+          console.log("o: ", this._expectedOutput, " a: ", actualOutput, " errors: ", e);
         }
       }
     }
     this.training = false;
     this.trained = true;
-
-    console.log("w1: ", this.inputWeights.toString());
-    console.log("w2: ", this.hiddenWeights.toString());
   }
 
-  public updateInputWeights(epoch: number = 0,
-                            x: number[],
-                            hiddenWeightSum: number[],
-                            outputWeightSum: number[],
-                            errors: number[]) {
+  public updateHiddenWeights(epoch: number = 0,
+                             x: number[],
+                             hiddenWeightSum: number[],
+                             outputWeightSum: number[],
+                             errors: number[]) {
 
-    // console.log(x);
-    // console.log(errors);
-    // console.log("===");
-
-
-    const gradient: Matrix = this.getInputWeightsGradient(epoch, x, hiddenWeightSum, outputWeightSum, errors);
-    const weights: Matrix = this.inputWeights;
+    const gradient: Matrix = this.getHiddenWeightsGradient(epoch, x, hiddenWeightSum, outputWeightSum, errors);
+    const weights: Matrix = this.hiddenWeights;
     const learnRate: number = this.getLearnRate();
-    // console.log("gradient: \n", gradient.toString());
     if (!this.lastDeltaW1) {
       this.lastDeltaW1 = new Matrix(weights.size().rowsCount, weights.size().columnsCount);
       for (let i = 0; i < this.lastDeltaW1.size().rowsCount; i++) {
@@ -285,7 +243,7 @@ export class DataUtils {
     this.updateWeights("input", gradient, weights, learnRate);
   }
 
-  private getInputWeightsGradient(epoch: number,
+  private getHiddenWeightsGradient(epoch: number,
                                   x: number[],
                                   hiddenWeightSum: number[],
                                   outputWeightSum: number[],
@@ -296,83 +254,47 @@ export class DataUtils {
 
     const gradient = new Matrix(gradientRowsCount, gradientColumnsCount);
 
-    const w1: Matrix = this.inputWeights;
-    const w2: Matrix = this.hiddenWeights;
-
-    let str = "";
-
-    str += `epoch: ${epoch}\n` +
-      `x: ${x}\n` +
-      `hiddenWeightSum: ${hiddenWeightSum}\n`
-      + `outputWeightSum: ${outputWeightSum}\n`
-      + `errors: ${errors}\n`
-      + `weights: ${w1}\n`;
+    const w1: Matrix = this.hiddenWeights;
+    const w2: Matrix = this.outputWeights;
 
     // delta 1
     for (let row = 0; row < gradientRowsCount; row++) {
       for (let column = 0; column < gradientColumnsCount; column++) {
 
-        str += `${row}, ${column}\n`;
-
         //calculate gradient
         let gradientValue = 0;
         for (let s = 0; s < this.configuration.outputCount; s++) {
-          str += `\ts = ${s}\n`;
           let e_s = errors[s];
-          str += `\tes = ${e_s}\n`;
           let g_s = outputWeightSum[s];
           let dfg_dg = MathDecorator.derivative2(g_s);
-          str += `\tdfg_dg = ${dfg_dg}\n`;
           let sum = 0;
-          str += `\tsum = ${sum}\n`;
           if (epoch > 0) { // dv_dw(0) = 0
             for (let i = 0; i < this.configuration.hiddenCount; i++) {
               for (let k = 0; k < this.configuration.hiddenCount; k++) {
-                str += `\t\ti =  ${i}\n`;
                 let u_i = hiddenWeightSum[i];
-                str += `\t\tui =  ${u_i}\n`;
                 let d_u_i = MathDecorator.derivative1(u_i);
-                str += `\t\tdui =  ${d_u_i}\n`;
                 let dab_xb = MathUtils.kroneckerDelta(i, column) * x[row];
-                str += `\t\tdab_xb =  ${dab_xb}\n`;
-
-                // console.log("index: ", k + this.configuration.inputCount);
-                // console.log("weights: ", w1);
-                // console.log("row: ", w1.getRow(k + this.configuration.inputCount))
-                // console.log("item: ", w1.get(k + this.configuration.inputCount, i));
                 dab_xb += MathDecorator.derivative2(hiddenWeightSum[k]) * w1.get(k + this.configuration.inputCount, i);
-                str += `\t\t\tk = ${k}, dab_xb = ${dab_xb}\n`;
                 sum += d_u_i * dab_xb * w2.get(i, s);
-
               }
             }
-            // dab_xb = Math.floor(dab_xb);
-            // str += `\t\t dab_xb = ${dab_xb}\n`;
-            str += `\t\t sum = ${sum}\n`;
           }
           gradientValue += e_s * dfg_dg * sum;
-          str += `\tgradient ab: ${gradientValue} \n`;
         }
         gradient.set(row, column, gradientValue);
-        str += `gradient [a][b]: ${gradient.get(row, column)}\n`;
       }
     }
-
-    str += `gradient: ${gradient}\n"============================="\n\n`;
-
-    // console.log(str);
 
     return gradient;
   }
 
-  public updateHiddenWeights(hiddenWeightSum: number[],
+  public updateOutputWeights(hiddenWeightSum: number[],
                              outputWeightSum: number[],
                              errors: number[]) {
 
-    const gradient: Matrix = this.getHiddenWeightsGradient(hiddenWeightSum, outputWeightSum, errors);
-    const weights: Matrix = this.hiddenWeights;
+    const gradient: Matrix = this.getOutputWeightsGradient(hiddenWeightSum, outputWeightSum, errors);
+    const weights: Matrix = this.outputWeights;
     const learnRate: number = this.getLearnRate();
-    // console.log("gradient H: \n", gradient.toString());
     if (!this.lastDeltaW2) {
       this.lastDeltaW2 = new Matrix(weights.size().rowsCount, weights.size().columnsCount);
       for (let i = 0; i < this.lastDeltaW2.size().rowsCount; i++) {
@@ -384,7 +306,7 @@ export class DataUtils {
     this.updateWeights("hidden", gradient, weights, learnRate);
   }
 
-  private getHiddenWeightsGradient(hiddenWeightSum: number[],
+  private getOutputWeightsGradient(hiddenWeightSum: number[],
                                    outputWeightSum: number[],
                                    errors: number[]): Matrix {
 
@@ -410,7 +332,7 @@ export class DataUtils {
   }
 
   private alpha(): number {
-    return 0.1;
+    return 0.01;
   }
 
   private updateWeights(name: string, gradient: Matrix, weights: Matrix, learnRate: number) {
@@ -433,14 +355,13 @@ export class DataUtils {
     }
   }
 
-  public feedWardPropagation(x: number[]) {
+  public feedWardPropagation(x: number[], name?: string) {
     const inputCount = x.length;
 
     x = [...x, ...Array(this.configuration.contextCount).fill(0)];
 
     //iterate by hidden neurons
-    let w: Matrix = this.inputWeights;
-    console.log("w1: ", w.toString());
+    let w: Matrix = this.hiddenWeights;
     for (let i = 0; i < this.configuration.hiddenCount; i++) {
       let sum = 0;
       for (let j = 0; j < this.configuration.inputCount + this.configuration.contextCount; j++) {
@@ -450,8 +371,7 @@ export class DataUtils {
     }
 
     //iterate by output neurons
-    w = this.hiddenWeights;
-    console.log("w2: ", w.toString());
+    w = this.outputWeights;
     let currentOutput = [];
     for (let s = 0; s < this.configuration.outputCount; s++) {
       let sum = 0;
@@ -461,17 +381,36 @@ export class DataUtils {
       currentOutput[s] = MathDecorator.function2(sum);
     }
 
-    this.output += `output: ${currentOutput}\n\n`;
+    let index = 0;
+    let max = currentOutput[index];
+    for (let i = 0; i < currentOutput.length; i++) {
+      if (currentOutput[i] > max) {
+        index = i;
+        max = currentOutput[index];
+      }
+    }
+
+    let isTrue = false;
+    if (name === "setosa") {
+      isTrue = index === 0;
+    } else if(name === "versicolor") {
+      isTrue = index === 1;
+    } else if(name === "virginica") {
+      isTrue = index === 2;
+    }
+
+    this.output += `output: ${currentOutput} [${isTrue}]\n\n`;
     this.outputS.next(this.output);
-    // console.log("Output: ", currentOutput);
-  }
-
-  public backWardPropagation() {
-
   }
 
   private getLearnRate(): number {
-    return 0.2;
+    return 0.1;
+  }
+
+  testingByClass = {
+    "setosa": [],
+    "versicolor": [],
+    "virginica": []
   }
 
   private distribute(samples: Array<number[]>, yTrue: number[]): void {
@@ -483,7 +422,6 @@ export class DataUtils {
       ];
 
       let trainingSamples = [];
-      let testingSamples = [];
       let expectedOutput = [];
 
       let handled = 0;
@@ -496,29 +434,35 @@ export class DataUtils {
         let length = samplesByClass.length;
         let trainingLength = this.getNewLength(length, this.configuration.training);
         //samples
+        let trainingSamplesByClass = samplesByClass.slice(0, trainingLength);
         trainingSamples = [
           ...trainingSamples,
-          ...samplesByClass.slice(0, trainingLength)
+          ...trainingSamplesByClass
         ];
-        testingSamples = [
-          ...testingSamples,
-          ...samplesByClass.slice(trainingLength, length)
-        ];
-        // console.log("class: ", ...samplesByClass.slice(trainingLength, length));
+        let testingSamplesByClass = samplesByClass.slice(trainingLength, length);
+        let name = "unknown";
+        switch (i) {
+          case 0:
+            name = "setosa";
+            break;
+          case 1:
+            name = "versicolor";
+            break;
+          case 2:
+            name = "virginica";
+            break;
+        }
+        this.testingByClass[name] = [...testingSamplesByClass];
         //output
-        expectedOutput = [
-          ...expectedOutput,
-          ...yTrueByClass.slice(0, trainingLength).map(y => [y])
-        ];
+        for (let j = 0; j < trainingSamplesByClass.length; j++) {
+          let output = Array(this.configuration.outputCount).fill(0);
+          output[i] = 1;
+          expectedOutput.push(output);
+        }
       }
 
       this._trainingSamples = trainingSamples;
-      this._testingSamples = testingSamples;
       this._expectedOutput = expectedOutput;
-
-      // console.log(this._trainingSamples);
-      // console.log(this._testingSamples);
-      // console.log(this._expectedOutput);
     }
   }
 
@@ -600,7 +544,7 @@ export class DataUtils {
       }
       subjectParamsVector = this.normalizeMatrix(subjectParamsVector);
       expectedOutputVector = this.normalizeVector(expectedOutputVector);
-      this.configuration.outputCount = 1;
+      this.configuration.outputCount = 3;
       this.configuration.inputCount = subjectParamsVector[0].length;
       this.configuration.hiddenCount = Math.round((this.configuration.inputCount + this.configuration.outputCount) / 2);
       this.configuration.contextCount = this.configuration.hiddenCount;

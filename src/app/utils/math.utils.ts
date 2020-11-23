@@ -5,7 +5,7 @@ export class MathDecorator {
   }
 
   public static function2(x: number): number {
-    return MathUtils.tanh(x);
+    return MathUtils.sigmoid(x);
   }
 
   public static derivative1(x: number): number {
@@ -13,7 +13,7 @@ export class MathDecorator {
   }
 
   public static derivative2(x: number): number {
-    return MathUtils.dTanh(x);
+    return MathUtils.dSigmoid(x);
   }
 
 }
@@ -52,18 +52,11 @@ export class MathUtils {
 
   public static standardDeviation(array: number[]): number {
     let n = array.length;
-
-    let mean = 0;
-    for (let i = 0; i < n; i++) {
-      mean += array[i];
-    }
-    mean /= n;
-
     let standardDeviation = 0;
     for (let i = 0; i < n; i++) {
-      standardDeviation += Math.pow((array[i] - mean), 2);
+      standardDeviation += array[i];
     }
-    standardDeviation /= (n - 1);
+    standardDeviation /= (3*n - 1);
     standardDeviation = Math.sqrt(standardDeviation);
     return standardDeviation;
   }
@@ -123,6 +116,17 @@ export class Matrix {
       s += '\n';
     }
     return s;
+  }
+
+  containsNaN(): boolean {
+    for (let i = 0; i < this._rows.length; i++) {
+      for (let j = 0; j < this._rows[0].length; j++) {
+        if(Number.isNaN(this.get(i, j))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
 }
